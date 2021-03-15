@@ -1,0 +1,176 @@
+from machine import Pin
+from machine import LCD
+#导入 camera 模块
+from camera import camera
+#导入 userfunc 模块
+import userfunc
+import utime as time
+import rtthread
+import ujson as json
+import uos as os
+
+try:
+    import urequests as requests
+except ImportError:
+    import requests
+
+SUMMER_SERVER_PATH = "http://www.abscom.cn:8080/manage"
+userID = ""
+userSessionID = ""
+
+#注册功能
+def funcReg():
+    global userID
+    result = {}
+    
+    requestData = {}
+    requestData["method"]  = "REG"
+    requestData["username"]  = "DDKK"
+    requestData["password"]  = "123456"
+    requestData["version"]  = "2.3"
+    
+    url = SUMMER_SERVER_PATH
+    header = {'content-type':'application/json;charset=utf-8'}
+
+    payload = json.dumps(requestData)
+    r = requests.post(url, data = payload, headers = header)
+    if r.status_code == 200:
+        rtnData = json.loads(r.text)
+        rtnCode = rtnData.get("error") 
+        if rtnCode == "0" or rtnCode == 0: 
+            result["userid"] = rtnData.get("userid", "") 
+            userID = result["userid"]
+            result["username"] = rtnData.get("username", "") 
+            result["version"] = rtnData.get("version", "") 
+ 
+    return result
+
+
+#登录功能
+def funcLogin():
+    global userID
+    result = {}
+    
+    requestData = {}
+    requestData["method"]  = "LOGIN"
+    requestData["username"]  = "DDKK"
+    requestData["password"]  = "123456"
+    requestData["userid"]  = userID
+    requestData["version"]  = "2.3"
+    
+    url = SUMMER_SERVER_PATH
+    header = {'content-type':'application/json;charset=utf-8'}
+
+    payload = json.dumps(requestData)
+    r = requests.post(url, data = payload, headers = header)
+    if r.status_code == 200:
+        rtnData = json.loads(r.text)
+        rtnCode = rtnData.get("error") 
+        if rtnCode == "0" or rtnCode == 0: 
+            result["userid"] = rtnData.get("userid", "") 
+            userID = result["userid"]
+            result["username"] = rtnData.get("username", "") 
+            result["version"] = rtnData.get("version", "") 
+            result["session"] = rtnData.get("session", "") 
+
+    return result
+
+
+#AI服务调用
+def funcAIService(dataSet):
+    global userID
+    result = {}
+    
+    requestData = {}
+    requestData["method"]  = "AISERVICE"
+    requestData["userid"]  = userID
+    requestData["session"]  = dataSet.get("session")
+    requestData["type"]  = dataSet.get("type")
+    requestData["filename"]  = dataSet.get("filename")
+    requestData["data"]  = dataSet.get("data")
+    requestData["filename2"]  = dataSet.get("filename2")
+    requestData["data2"]  = dataSet.get("data2")
+    requestData["version"]  = "2.3"
+    
+    url = SUMMER_SERVER_PATH
+    header = {'content-type':'application/json;charset=utf-8'}
+
+    payload = json.dumps(requestData)
+    r = requests.post(url, data = payload, headers = header)
+    if r.status_code == 200:
+        rtnData = json.loads(r.text)
+        rtnCode = rtnData.get("error") 
+        if rtnCode == "0" or rtnCode == 0:
+            result = rtnData
+
+    return result
+
+
+#调用服务器功能
+def testServer(dataSet):
+    global userID
+    if userID or userID == "":
+        funcReg()
+    data = funcLogin()
+    time.sleep(2)
+    #
+    requestData = dataSet
+    requestData["userid"]  = data.get("userid")
+    requestData["session"]  = data.get("session")
+    requestData["version"]  = "2.3"
+
+    requestData["type"] = "FACE_1V1"
+    rtnData = funcAIService(requestData)
+    time.sleep(5)
+    print(json.dumps(rtnData)) 
+    time.sleep(5)
+    #return rtnData["matchRate"]
+    
+
+def func(v):
+    print("Hello rt-thread!")
+    #保存图片到文件系统中,"picture.jpg"为保存图片的名称
+    cam.snapshot(pic_name)
+    time.sleep(1)
+    userfunc.lcd_show_pic(pic_name) #显示图片到 LCD 上
+    time.sleep(5)
+    dataSet={}
+    pic_data=userfunc.picbase64urlencode(pic_name)
+    time.sleep(2)
+    dataSet["data"] = pic_data
+    dataSet["filename"] = pic_name
+    dataSet["data2"] = pic_data
+    dataSet["filename2"] = pic_name
+    testServer(dataSet)
+    time.sleep(2)
+    
+    #if respond>=0.7:
+    #    lcd.fill(lcd.WHITE)
+    #else:
+     #   lcd.fill(lcd.RED)
+    
+
+def main():
+    key_0 = Pin(("key_0", Mid_Key), Pin.IN, Pin.PULL_UP)
+    key_0.irq(trigger=Pin.IRQ_RISING, handler=func)
+    key_0 = Pin(("key_0", Mid_Key), Pin.IN, Pin.PULL_UP)
+    #student={'duan':{'shengao':180,'tizhong':90},
+    #         'zhu':{'shengao':175,'tizhong':88}}
+    while key_0:
+        cam.snapshot(pic_name)
+        time.sleep(1)
+        userfunc.lcd_show_pic(pic_name)
+    
+
+    
+if __name__ == '__main__':
+    #注意这里需要替换为自己的手机热点的名称和密码
+    rtthread.wifi_join("w0", "DUAN", "12345678") 
+    #使用适当的延时，等待 WIFI 连接成功
+    time.sleep(10) 
+    pic_name = 'picture.jpg'
+    cam = camera()
+    lcd = LCD()
+    Mid_Key=13
+    main()
+    
